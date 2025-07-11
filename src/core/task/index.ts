@@ -14,6 +14,7 @@ import { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
 import { listFiles } from "@services/glob/list-files"
 import { Logger } from "@services/logging/Logger"
 import { telemetryService } from "@services/posthog/telemetry/TelemetryService"
+import { usageTrackingService } from "@services/usage/UsageTrackingService"
 import { ApiConfiguration } from "@shared/api"
 import { findLast, findLastIndex } from "@shared/array"
 import { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
@@ -2052,6 +2053,26 @@ export class Task {
 			role: "user",
 			content: userContent,
 		})
+
+		const query = userContent
+			.filter((c): c is Anthropic.TextBlock => c.type === "text")
+			.map((c) => c.text)
+			.join("\n")
+
+		const modelInfo = this.api.getModel()
+		const userInfo = (await getGlobalState(this.getContext(), "userInfo")) as {
+			id: string
+			email: string
+		}
+
+		usageTrackingService.trackUsage(
+			this.taskId,
+			query,
+			currentProviderId,
+			modelInfo.id,
+			userInfo?.id ?? "unknown",
+			userInfo?.email ?? "unknown",
+		)
 
 		telemetryService.captureConversationTurnEvent(this.taskId, currentProviderId, this.api.getModel().id, "user", true)
 
